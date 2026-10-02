@@ -103,11 +103,12 @@ D.st = Object.assign({ plays: 0, earned: 0, pongWins: 0, tttWins: 0 }, D.st);
 D.q = Object.assign({ day: '', base: {}, done: [] }, D.q);
 D.ach = D.ach || []; D.name = D.name || '';
 const LV = {
-  easy: { m: .5, gap: 90, spd: 2, sb: 10, smin: 6, bot: 1.6, mole: 900, mem: 1000 },
-  normal: { m: 1, gap: 72, spd: 2.4, sb: 8, smin: 4, bot: 2.4, mole: 650, mem: 700 },
-  hard: { m: 2, gap: 58, spd: 2.9, sb: 6, smin: 3, bot: 3.4, mole: 450, mem: 400 }
+  easy: { m: .5, gap: 90, spd: 2, sb: 10, smin: 6, bot: 1.6, mole: 900, mem: 1000, sp: 3 },
+  normal: { m: 1, gap: 72, spd: 2.4, sb: 8, smin: 4, bot: 2.4, mole: 650, mem: 700, sp: 4 },
+  hard: { m: 2, gap: 58, spd: 2.9, sb: 6, smin: 3, bot: 3.4, mole: 450, mem: 400, sp: 5.2 }
 };
 if (!LV[D.lvl]) D.lvl = 'normal';
+const RATE = { flappy: .5, snake: .5, traffic: .4, runner: .3, whack: .4, 'pong win': .6, 'tic-tac-toe win': .6, draw: .6, 'memory clear': .6 };
 const store = () => { try { localStorage.setItem('arcade2', JSON.stringify(D)); } catch (e) {} };
 const rec = (k, v, low) => { const o = D.best[k]; D.best[k] = o === undefined ? v : low ? Math.min(o, v) : Math.max(o, v); store(); checkAch(); };
 const stat = (k, n = 1) => { qReset(); D.st[k] = (D.st[k] || 0) + n; if (k === 'plays' && D.lvl === 'hard') D.st.hard = (D.st.hard || 0) + 1; store(); checkAch(); };
@@ -150,9 +151,9 @@ const ITEMS = [
   { id: 'p4', k: 'p', n: 'Laser paddle', p: 100, c: '#00ff9c', box: 1 },
   { id: 'f4', k: 'f', n: '💎 Diamond', p: 150, c: '💎', box: 1 },
   { id: 'r4', k: 'r', n: 'Ice trail', p: 70, c: '#aee9ff', box: 1 },
-  { id: 'x2', k: 'x', n: 'Double coins', p: 150 },
-  { id: 'x3', k: 'x', n: 'Flappy shield', p: 120 },
-  { id: 'x4', k: 'x', n: 'Slower Pong bot', p: 80 }
+  { id: 'x2', k: 'x', n: 'Double coins', p: 350 },
+  { id: 'x3', k: 'x', n: 'Flappy shield', p: 200 },
+  { id: 'x4', k: 'x', n: 'Slower Pong bot', p: 120 }
 ];
 const item = id => ITEMS.find(i => i.id === id);
 const col = (v, i = 0) => v === 'rb' ? `hsl(${(fr * 4 + i * 20) % 360},85%,60%)` : v;
@@ -167,7 +168,7 @@ function toast(t) {
   clearTimeout(tt); tt = setTimeout(() => el.classList.remove('on'), 1800);
 }
 function earn(n, why) {
-  n = n > 0 ? Math.max(1, Math.round(n * LV[D.lvl].m)) * (D.owned.includes('x2') ? 2 : 1) : 0;
+  n = n > 0 ? Math.max(1, Math.round(n * (RATE[why] || .5) * LV[D.lvl].m)) * (D.owned.includes('x2') ? 2 : 1) : 0;
   if (n <= 0) return 0;
   qReset(); D.coins += n; D.st.earned += n; store(); checkAch(); coinUI(); toast('+' + n + ' 🪙 ' + why);
   return n;
@@ -344,7 +345,116 @@ const P = {
     else if (this.over) banner(this.ps >= 5 ? 'YOU WIN!' : 'BOT WINS', 'Tap to rematch', '+' + this.got + ' coins');
   }
 };
-const CG = { flappy: F, snake: S, pong: P };
+/* ---------- Traffic racer ---------- */
+const lx = i => 60 + i * 80;
+function car(x, y, color) {
+  c.fillStyle = color; c.fillRect(x - 16, y - 30, 32, 60);
+  c.fillStyle = 'rgba(0,0,0,.5)'; c.fillRect(x - 12, y - 20, 24, 14); c.fillRect(x - 12, y + 10, 24, 8);
+  c.fillStyle = '#fff3b0'; c.fillRect(x - 14, y - 31, 6, 4); c.fillRect(x + 8, y - 31, 6, 4);
+}
+const TR = {
+  init() { this.tl = 1; this.x = lx(1); this.cars = []; this.s = 0; this.dead = false; this.go = false; this.t = 0; this.sp = LV[D.lvl].sp; this.off = 0; this.got = 0; },
+  act() { if (this.dead) { if (performance.now() - this.dt < 400) return; this.init(); } this.go = true; },
+  mv(d) { this.go = true; if (this.dead) return; this.tl = clamp(this.tl + d, 0, 3); beep(400, .03); },
+  key(k) { if (k === 'arrowleft' || k === 'a') this.mv(-1); else if (k === 'arrowright' || k === 'd') this.mv(1); else if (k === ' ') this.act(); },
+  step() {
+    if (!this.go || this.dead) return;
+    this.t++; this.sp += .0015; this.off = (this.off + this.sp) % 40;
+    this.x += (lx(this.tl) - this.x) * .25;
+    if (this.t % Math.max(22, Math.floor(70 - this.sp * 6)) === 0 && this.cars.filter(o => o.y < 200).length < 3) {
+      const l = Math.random() * 4 | 0;
+      if (!this.cars.some(o => o.l === l && o.y < 120)) this.cars.push({ l, y: -60, k: Math.random() * .25, c: Math.random() * 360 | 0 });
+    }
+    for (const o of this.cars) {
+      o.y += this.sp * (.6 + o.k);
+      if (!o.d && o.y > 470) { o.d = 1; this.s++; beep(700, .03); }
+      if (Math.abs(lx(o.l) - this.x) < 30 && Math.abs(o.y - 400) < 56) {
+        this.dead = true; this.dt = performance.now(); shake = 12; burst(this.x, 400, '#ff8a3d', 30);
+        stat('plays'); rec('traffic', this.s); this.got = earn(this.s, 'traffic'); beep(120, .3); break;
+      }
+    }
+    this.cars = this.cars.filter(o => o.y < 540);
+  },
+  draw() {
+    backdrop();
+    c.fillStyle = '#2b2b3d'; c.fillRect(20, 0, 320, 480);
+    c.fillStyle = '#ffc857'; c.fillRect(17, 0, 4, 480); c.fillRect(339, 0, 4, 480);
+    c.fillStyle = 'rgba(255,255,255,.45)';
+    for (let i = 1; i < 4; i++) for (let y = -40 + this.off; y < 480; y += 40) c.fillRect(20 + i * 80 - 2, y, 4, 20);
+    this.cars.forEach(o => car(lx(o.l), o.y, `hsl(${o.c},65%,55%)`));
+    if (!this.dead || fr % 6 < 3) car(this.x, 400, col(item(D.eq.b).c));
+    c.textAlign = 'center'; c.fillStyle = '#f4efe6'; c.font = "22px 'Press Start 2P',monospace"; c.fillText(this.s, 180, 50);
+    info('Cars passed ' + this.s + '   Best ' + (D.best.traffic || 0));
+    if (!this.go) banner('TRAFFIC', 'Tap left or right to steer');
+    else if (this.dead) banner('CRASH!', 'Tap to retry', '+' + this.got + ' coins');
+  }
+};
+
+/* ---------- Runner (jump + slide) ---------- */
+const RN = {
+  init() { this.y = 380; this.vy = 0; this.sl = 0; this.o = []; this.s = 0; this.c = 0; this.dist = 0; this.nx = 300; this.sp = LV[D.lvl].sp; this.dead = false; this.go = false; this.got = 0; },
+  act() {
+    if (this.dead) { if (performance.now() - this.dt < 400) return; this.init(); }
+    this.go = true;
+    if (this.y >= 380) { this.vy = -12.5; this.sl = 0; beep(520, .05); }
+  },
+  slide() { this.go = true; if (this.dead) return; if (this.y < 380) this.vy = 12; else { this.sl = 30; beep(300, .05); } },
+  key(k) { if (k === ' ' || k === 'arrowup' || k === 'w') this.act(); else if (k === 'arrowdown' || k === 's') this.slide(); },
+  spawn() {
+    const r = Math.random();
+    if (r < .55) this.o.push({ t: 'b', x: 380, w: 26, y1: 346, y2: 380 });
+    else if (r < .8) this.o.push({ t: 'h', x: 380, w: 46, y1: 318, y2: 336 });
+    else { const y = Math.random() < .5 ? 355 : 290; for (let i = 0; i < 5; i++) this.o.push({ t: 'c', x: 380 + i * 30, y }); }
+    this.nx = 240 + Math.random() * 200 + this.sp * 15;
+  },
+  step() {
+    if (!this.go || this.dead) return;
+    this.sp += .0012; this.dist += this.sp; this.nx -= this.sp;
+    this.vy += .7; this.y = Math.min(380, this.y + this.vy); if (this.y >= 380) this.vy = 0;
+    if (this.sl) this.sl--;
+    this.s = this.c + Math.floor(this.dist / 150);
+    if (this.nx <= 0) this.spawn();
+    const sl = this.sl > 0 && this.y >= 380, top = this.y - (sl ? 16 : 51);
+    for (const o of this.o) {
+      o.x -= this.sp;
+      if (o.t === 'c') {
+        if (!o.g && Math.abs(o.x - 70) < 18 && Math.abs(o.y - (this.y - (sl ? 8 : 25))) < 24) { o.g = 1; this.c++; beep(900, .04); burst(70, o.y, '#ffc857', 4); }
+        continue;
+      }
+      if (o.x + o.w - 3 > 62 && o.x + 3 < 78 && o.y2 > top + 3 && o.y1 < this.y - 3) {
+        this.dead = true; this.dt = performance.now(); shake = 12; burst(70, this.y - 20, '#ff5d73', 30);
+        stat('plays'); rec('runner', this.s); this.got = earn(this.s, 'runner'); beep(120, .3); break;
+      }
+    }
+    this.o = this.o.filter(o => o.x > -60 && !o.g);
+  },
+  draw() {
+    backdrop();
+    c.fillStyle = 'rgba(255,255,255,.06)';
+    const bo = this.dist * .3;
+    for (let i = -1; i < 9; i++) { const h = 60 + (Math.floor(bo / 50) + i + 2) * 37 % 5 * 25; c.fillRect(i * 50 - bo % 50, 380 - h, 40, h); }
+    c.fillStyle = '#2b2b3d'; c.fillRect(0, 380, 360, 100);
+    c.fillStyle = 'rgba(255,255,255,.3)'; for (let x = -(this.dist % 40); x < 360; x += 40) c.fillRect(x, 430, 20, 4);
+    this.o.forEach(o => {
+      if (o.t === 'c') { c.shadowBlur = 10; c.shadowColor = '#ffc857'; c.fillStyle = '#ffc857'; c.beginPath(); c.arc(o.x, o.y, 8, 0, 7); c.fill(); c.shadowBlur = 0; }
+      else if (o.t === 'b') { c.fillStyle = '#ff5d73'; c.fillRect(o.x, o.y1, o.w, 34); c.fillStyle = '#fff'; c.fillRect(o.x, o.y1 + 8, o.w, 6); c.fillRect(o.x, o.y1 + 22, o.w, 6); }
+      else { c.fillStyle = '#8a86a8'; c.fillRect(o.x + 2, 246, 3, 72); c.fillRect(o.x + o.w - 5, 246, 3, 72); c.fillRect(o.x, 246, o.w, 6); c.fillStyle = '#ff5d73'; c.fillRect(o.x, o.y1, o.w, 18); }
+    });
+    if (!this.dead || fr % 6 < 3) {
+      const bc = col(item(D.eq.b).c), sl = this.sl > 0 && this.y >= 380, ru = fr % 12 < 6 && this.y >= 380;
+      if (sl) { c.fillStyle = bc; c.fillRect(53, this.y - 14, 34, 14); c.fillStyle = '#ffd9a8'; c.beginPath(); c.arc(86, this.y - 16, 8, 0, 7); c.fill(); }
+      else {
+        c.fillStyle = bc; c.fillRect(60, this.y - 40, 20, 26); c.fillRect(ru ? 58 : 66, this.y - 14, 8, 14); c.fillRect(ru ? 72 : 64, this.y - 14, 8, 14);
+        c.fillStyle = '#ffd9a8'; c.beginPath(); c.arc(70, this.y - 47, 9, 0, 7); c.fill();
+      }
+    }
+    c.textAlign = 'center'; c.fillStyle = '#f4efe6'; c.font = "22px 'Press Start 2P',monospace"; c.fillText(this.s, 180, 50);
+    info('Score ' + this.s + '  Coins ' + this.c + '  Best ' + (D.best.runner || 0));
+    if (!this.go) banner('RUNNER', 'Tap to jump, swipe down to slide');
+    else if (this.dead) banner('WIPEOUT!', 'Tap to retry', '+' + this.got + ' coins');
+  }
+};
+const CG = { flappy: F, snake: S, pong: P, traffic: TR, runner: RN };
 
 /* ---------- Tic-Tac-Toe (you = X) ---------- */
 const L = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
@@ -466,9 +576,9 @@ $('#shop').onclick = e => {
 
 /* ---------- Mystery boxes ---------- */
 const BOX = {
-  c: { n: '📦 Common box', p: 30, lo: 1, hi: 50 },
-  r: { n: '🎁 Rare box', p: 80, lo: 51, hi: 99 },
-  e: { n: '💎 Epic box', p: 150, lo: 100, hi: 999 }
+  c: { n: '📦 Common box', p: 40, lo: 1, hi: 50 },
+  r: { n: '🎁 Rare box', p: 100, lo: 51, hi: 99 },
+  e: { n: '💎 Epic box', p: 200, lo: 100, hi: 999 }
 };
 let boxMsg = '';
 function boxHTML() {
@@ -504,14 +614,18 @@ const ACH = [
   { id: 'a11', n: 'On a roll', d: 'Reach a 3 day streak', r: 25, t: () => D.daily.best >= 3 },
   { id: 'a12', n: 'Big earner', d: 'Earn 500 coins', r: 50, t: () => D.st.earned >= 500 },
   { id: 'a13', n: 'Brave', d: 'Finish a game on Hard', r: 40, t: () => D.st.hard >= 1 },
-  { id: 'a14', n: 'Box opener', d: 'Open 5 mystery boxes', r: 40, t: () => D.st.boxes >= 5 }
+  { id: 'a14', n: 'Box opener', d: 'Open 5 mystery boxes', r: 40, t: () => D.st.boxes >= 5 },
+  { id: 'a15', n: 'Road warrior', d: 'Pass 20 cars in Traffic', r: 40, t: () => D.best.traffic >= 20 },
+  { id: 'a16', n: 'Parkour', d: 'Score 40 in Runner', r: 40, t: () => D.best.runner >= 40 }
 ];
 const dq = k => (D.st[k] || 0) - (D.q.base[k] || 0);
 const QS = [
   { id: 'q1', n: 'Finish 3 games', r: 15, t: 3, v: () => dq('plays') },
   { id: 'q2', n: 'Win Pong or Tic-Tac-Toe', r: 20, t: 1, v: () => dq('pongWins') + dq('tttWins') },
-  { id: 'q3', n: 'Earn 40 coins', r: 20, t: 40, v: () => dq('earned') }
+  { id: 'q3', n: 'Earn 25 coins', r: 20, t: 25, v: () => dq('earned') }
 ];
+ACH.forEach(a => a.r = Math.ceil(a.r / 2));
+QS.forEach(q => q.r = Math.ceil(q.r / 2));
 function qReset() { const t = today(); if (D.q.day !== t) D.q = { day: t, base: { ...D.st }, done: [] }; }
 function checkAch() {
   ACH.forEach(a => {
@@ -523,7 +637,7 @@ function checkAch() {
 function dailyInfo() {
   const y = new Date(Date.now() - 864e5).toLocaleDateString('en-CA');
   const streak = D.daily.last === y ? D.daily.streak + 1 : 1;
-  return { can: D.daily.last !== today(), streak, amt: 10 + 5 * Math.min(streak - 1, 6) };
+  return { can: D.daily.last !== today(), streak, amt: 5 + 3 * Math.min(streak - 1, 6) };
 }
 function dailyUI() {
   const d = dailyInfo(), el = $('#daily');
@@ -574,8 +688,8 @@ $('#lvl').onclick = e => {
   e.target.blur(); D.lvl = l; store(); lvlUI(); show(cur);
 };
 
-const GAMES = ['flappy', 'snake', 'pong', 'ttt', 'mem', 'wh'];
-const GI = { flappy: ['🐤', 'Flappy'], snake: ['🐍', 'Snake'], pong: ['🏓', 'Pong'], ttt: ['❌', 'Tic-Tac-Toe'], mem: ['🃏', 'Memory'], wh: ['🐹', 'Whack'] };
+const GAMES = ['flappy', 'snake', 'traffic', 'runner', 'pong', 'ttt', 'mem', 'wh'];
+const GI = { flappy: ['🐤', 'Flappy'], snake: ['🐍', 'Snake'], pong: ['🏓', 'Pong'], traffic: ['🚗', 'Traffic'], runner: ['🏃', 'Runner'], ttt: ['❌', 'Tic-Tac-Toe'], mem: ['🃏', 'Memory'], wh: ['🐹', 'Whack'] };
 function homeRender() {
   $('#home').innerHTML = GAMES.map(g => {
     const b = D.best[g], t = b === undefined ? 'Play' : g === 'mem' ? b + ' moves' : 'Best ' + b;
@@ -586,15 +700,17 @@ function homeRender() {
 $('#home').onclick = e => { const b = e.target.closest('[data-g]'); if (b) show(b.dataset.g); };
 
 /* ---------- Shell & input ---------- */
-const VIEW = { home: 'home', flappy: 'cv', snake: 'cv', pong: 'cv', ttt: 'ttt', mem: 'mem', wh: 'wh', shop: 'shop', goals: 'goals', prof: 'prof' };
+const VIEW = { home: 'home', traffic: 'cv', runner: 'cv', flappy: 'cv', snake: 'cv', pong: 'cv', ttt: 'ttt', mem: 'mem', wh: 'wh', shop: 'shop', goals: 'goals', prof: 'prof' };
 const TIPS = {
+  traffic: 'Tap the left or right side of the road, or use the arrow keys.',
+  runner: 'Tap or Space to jump, swipe down or press down to slide. Grab coins!',
   home: 'Win games to earn coins, then spend them in the Shop.',
-  flappy: 'Tap, click or press Space to flap. 1 coin per pipe.',
-  snake: 'Arrow keys or WASD. On a phone, swipe on the board. 1 coin per apple.',
-  pong: 'Move with mouse, finger or arrow keys. Win for 15 coins.',
-  ttt: 'You are X. Win for 10 coins, draw for 3.',
+  flappy: 'Tap, click or press Space to flap.',
+  snake: 'Arrow keys or WASD. On a phone, swipe on the board.',
+  pong: 'Move with mouse, finger or arrow keys. First to 5 wins.',
+  ttt: 'You are X. Beat the bot!',
   mem: 'Match all 8 pairs. Fewer moves, more coins.',
-  wh: 'Tap the hamsters. 1 coin per hit.',
+  wh: 'Tap the hamsters as fast as you can.',
   shop: 'Buy skins and boosts, or gamble on mystery boxes.',
   goals: 'Finish daily quests and unlock achievements for coins.',
   prof: 'Set your name, check your stats, share your scores.'
@@ -621,6 +737,7 @@ document.addEventListener('keydown', e => {
     if (m) { e.preventDefault(); S.dir(...m); } else if (k === ' ') { e.preventDefault(); S.act(); }
   }
   if (cur === 'pong') { if (k.startsWith('arrow')) e.preventDefault(); if (k === ' ') { e.preventDefault(); P.act(); } }
+  if (cur === 'traffic' || cur === 'runner') { if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) e.preventDefault(); (cur === 'traffic' ? TR : RN).key(k); }
 });
 document.addEventListener('keyup', e => { K[e.key.toLowerCase()] = 0; if (CG[cur] && e.key === ' ') e.preventDefault(); });
 const padX = e => { const r = cv.getBoundingClientRect(); return clamp((e.clientX - r.left) / r.width * 360 - 35, 0, 290); };
@@ -628,12 +745,14 @@ let sx, sy;
 cv.addEventListener('pointerdown', e => {
   sx = e.clientX; sy = e.clientY;
   if (cur === 'flappy') F.act();
+  if (cur === 'traffic') { const r = cv.getBoundingClientRect(); if (TR.dead || !TR.go) TR.act(); else TR.mv(e.clientX - r.left < r.width / 2 ? -1 : 1); }
   if (cur === 'pong') { P.px = padX(e); P.act(); }
 });
 cv.addEventListener('pointermove', e => { if (cur === 'pong') P.px = padX(e); });
 cv.addEventListener('pointerup', e => {
-  if (cur !== 'snake') return;
+  if (cur !== 'snake' && cur !== 'runner') return;
   const dx = e.clientX - sx, dy = e.clientY - sy;
+  if (cur === 'runner') { if (Math.abs(dy) > 25 && Math.abs(dy) > Math.abs(dx)) { if (dy > 0) RN.slide(); else RN.act(); } else RN.act(); return; }
   if (Math.abs(dx) < 20 && Math.abs(dy) < 20) S.act();
   else if (Math.abs(dx) > Math.abs(dy)) S.dir(dx > 0 ? 1 : -1, 0);
   else S.dir(0, dy > 0 ? 1 : -1);
@@ -655,3 +774,4 @@ theme(); coinUI(); qReset(); dailyUI(); lvlUI(); show('home');
 </script>
 </body>
 </html>
+
