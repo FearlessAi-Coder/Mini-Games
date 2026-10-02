@@ -56,6 +56,14 @@ p.tip{font-size:12px;line-height:1.5;max-width:380px;text-align:center;color:var
 #toast.on{transform:translateX(-50%) translateY(0)}
 @keyframes pop{0%{transform:scale(.3)}70%{transform:scale(1.12)}100%{transform:scale(1)}}
 @media (prefers-reduced-motion:no-preference){.pop{animation:pop .5s}}
+.wr{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:6px}
+.wr i{font-style:normal;aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;text-transform:uppercase;background:rgba(255,255,255,.08);border-radius:12px}
+.wr i.ok,.kr button.ok{background:#3fbf9f;color:#10202a}
+.wr i.in,.kr button.in{background:var(--gold);color:#1d1b2f}
+.wr i.no,.kr button.no{background:rgba(0,0,0,.35);color:var(--mute)}
+.kr{display:flex;gap:4px;justify-content:center;margin-top:6px}
+.kr button{flex:1;padding:12px 0;font-size:14px;border-radius:10px;text-transform:uppercase}
+#ckb{display:block;margin:6px auto 14px;font-size:96px;line-height:1;padding:14px 26px;border-radius:50%;background:rgba(255,255,255,.07)}
 </style>
 </head>
 <body>
@@ -73,6 +81,8 @@ p.tip{font-size:12px;line-height:1.5;max-width:380px;text-align:center;color:var
   <div id="ttt" hidden></div>
   <div id="mem" hidden></div>
   <div id="wh" hidden></div>
+  <div id="cookie" hidden></div>
+  <div id="word" hidden></div>
   <div id="shop" hidden></div>
   <div id="goals" hidden></div>
   <div id="prof" hidden></div>
@@ -102,13 +112,14 @@ D.daily = Object.assign({ last: '', streak: 0, best: 0 }, D.daily);
 D.st = Object.assign({ plays: 0, earned: 0, pongWins: 0, tttWins: 0 }, D.st);
 D.q = Object.assign({ day: '', base: {}, done: [] }, D.q);
 D.ach = D.ach || []; D.name = D.name || '';
+D.ck = Object.assign({ n: 0, tot: 0, u: {}, t: Date.now() }, D.ck);
 const LV = {
   easy: { m: .5, gap: 90, spd: 2, sb: 10, smin: 6, bot: 1.6, mole: 900, mem: 1000, sp: 3 },
   normal: { m: 1, gap: 72, spd: 2.4, sb: 8, smin: 4, bot: 2.4, mole: 650, mem: 700, sp: 4 },
   hard: { m: 2, gap: 58, spd: 2.9, sb: 6, smin: 3, bot: 3.4, mole: 450, mem: 400, sp: 5.2 }
 };
 if (!LV[D.lvl]) D.lvl = 'normal';
-const RATE = { flappy: .5, snake: .5, traffic: .4, runner: .3, whack: .4, 'pong win': .6, 'tic-tac-toe win': .6, draw: .6, 'memory clear': .6 };
+const RATE = { flappy: .5, snake: .5, traffic: .4, runner: .3, whack: .4, 'pong win': .6, 'tic-tac-toe win': .6, draw: .6, 'memory clear': .6, invaders: .4, ninja: .4, td: .25, 'word win': .6 };
 const store = () => { try { localStorage.setItem('arcade2', JSON.stringify(D)); } catch (e) {} };
 const rec = (k, v, low) => { const o = D.best[k]; D.best[k] = o === undefined ? v : low ? Math.min(o, v) : Math.max(o, v); store(); checkAch(); };
 const stat = (k, n = 1) => { qReset(); D.st[k] = (D.st[k] || 0) + n; if (k === 'plays' && D.lvl === 'hard') D.st.hard = (D.st.hard || 0) + 1; store(); checkAch(); };
@@ -454,7 +465,256 @@ const RN = {
     else if (this.dead) banner('WIPEOUT!', 'Tap to retry', '+' + this.got + ' coins');
   }
 };
-const CG = { flappy: F, snake: S, pong: P, traffic: TR, runner: RN };
+/* ---------- Helpers for new games ---------- */
+const cp = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * 360, (e.clientY - r.top) / r.height * 480]; };
+function segD(px, py, ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay, l = dx * dx + dy * dy || 1, t = clamp(((px - ax) * dx + (py - ay) * dy) / l, 0, 1);
+  return Math.hypot(px - ax - t * dx, py - ay - t * dy);
+}
+
+/* ---------- Space Invaders (auto-fire) ---------- */
+const INV = {
+  init() { this.px = 180; this.b = []; this.ab = []; this.s = 0; this.lv = 3; this.wave = 0; this.dead = false; this.go = false; this.got = 0; this.cd = 0; this.mk(); },
+  mk() { this.wave++; this.al = []; for (let r = 0; r < 4; r++) for (let q = 0; q < 6; q++) this.al.push({ x: 50 + q * 44, y: 70 + r * 36 + Math.min(this.wave - 1, 4) * 10 }); this.dir = 1; },
+  act() { if (this.dead) { if (performance.now() - this.dt < 400) return; this.init(); } this.go = true; },
+  die() { this.dead = true; this.dt = performance.now(); shake = 12; stat('plays'); rec('invaders', this.s); this.got = earn(this.s, 'invaders'); beep(120, .3); },
+  step() {
+    if (!this.go || this.dead) return;
+    const k = LV[D.lvl].sp / 4;
+    if (K.arrowleft || K.a) this.px -= 5;
+    if (K.arrowright || K.d) this.px += 5;
+    this.px = clamp(this.px, 20, 340);
+    if (--this.cd <= 0) { this.b.push({ x: this.px, y: 440 }); this.cd = 20; }
+    const v = (.4 + this.wave * .1 + (24 - this.al.length) * .035) * k;
+    this.al.forEach(a => a.x += this.dir * v);
+    if (this.al.some(a => a.x < 20 || a.x > 340)) { this.dir *= -1; this.al.forEach(a => a.y += 14); }
+    if (this.al.length && Math.random() < (.012 + this.wave * .003) * k) { const a = this.al[Math.random() * this.al.length | 0]; this.ab.push({ x: a.x, y: a.y + 10 }); }
+    this.b.forEach(b => b.y -= 7); this.ab.forEach(b => b.y += 3 * k);
+    this.b.forEach(b => this.al.forEach(a => {
+      if (!a.d && !b.d && Math.abs(a.x - b.x) < 14 && Math.abs(a.y - b.y) < 14) { a.d = b.d = 1; this.s++; burst(a.x, a.y, '#5eead4', 8); beep(300, .04); }
+    }));
+    this.al = this.al.filter(a => !a.d); this.b = this.b.filter(b => !b.d && b.y > -10);
+    this.ab.forEach(b => { if (!b.d && Math.abs(b.x - this.px) < 16 && Math.abs(b.y - 450) < 14) { b.d = 1; this.lv--; shake = 8; burst(this.px, 450, '#ff5d73', 20); beep(120, .2); } });
+    this.ab = this.ab.filter(b => !b.d && b.y < 490);
+    if (this.lv <= 0 || this.al.some(a => a.y > 430)) return this.die();
+    if (!this.al.length) { this.s += 5; this.mk(); toast('Wave ' + this.wave + '!'); }
+  },
+  draw() {
+    backdrop();
+    c.textAlign = 'center'; c.font = '22px serif';
+    this.al.forEach(a => c.fillText('👾', a.x, a.y + 8));
+    c.fillStyle = '#ffc857'; this.b.forEach(b => c.fillRect(b.x - 2, b.y, 4, 12));
+    c.fillStyle = '#ff5d73'; this.ab.forEach(b => c.fillRect(b.x - 2, b.y, 4, 12));
+    c.fillStyle = col(item(D.eq.b).c); c.beginPath(); c.moveTo(this.px, 434); c.lineTo(this.px - 16, 462); c.lineTo(this.px + 16, 462); c.fill();
+    c.textAlign = 'left'; c.font = '14px serif'; c.fillText('❤️'.repeat(Math.max(0, this.lv)), 10, 28);
+    info('Score ' + this.s + '  Wave ' + this.wave + '  Best ' + (D.best.invaders || 0));
+    if (!this.go) banner('INVADERS', 'Drag or arrows to move', 'Your ship fires itself');
+    else if (this.dead) banner('GAME OVER', 'Tap to retry', '+' + this.got + ' coins');
+  }
+};
+
+/* ---------- Fruit slice ---------- */
+const FR = [['🍎', '#ff5d73'], ['🍊', '#ff9f43'], ['🍋', '#ffe66d'], ['🍉', '#ff6b81'], ['🍇', '#a55eea'], ['🍓', '#ff4d6d']];
+const NJ = {
+  init() { this.f = []; this.tr = []; this.s = 0; this.lv = 3; this.t = 0; this.dead = false; this.go = false; this.got = 0; this.last = null; },
+  act() { if (this.dead) { if (performance.now() - this.dt < 400) return; this.init(); } this.go = true; },
+  end() { this.dead = true; this.dt = performance.now(); shake = 12; stat('plays'); rec('ninja', this.s); this.got = earn(this.s, 'ninja'); beep(120, .3); },
+  slice(x, y) {
+    if (!this.go || this.dead) return;
+    const [x0, y0] = this.last; this.tr.push({ x, y, l: 10 });
+    this.f.forEach(f => {
+      if (f.s || segD(f.x, f.y, x0, y0, x, y) > f.r + 6) return;
+      f.s = 1;
+      if (f.b) { burst(f.x, f.y, '#ffffff', 30); this.end(); }
+      else { this.s++; burst(f.x, f.y, f.c, 14); beep(600 + Math.random() * 300, .04); }
+    });
+    this.last = [x, y];
+  },
+  step() {
+    this.tr.forEach(p => p.l--); this.tr = this.tr.filter(p => p.l > 0);
+    if (!this.go || this.dead) return;
+    const k = LV[D.lvl].sp / 4;
+    if (++this.t % Math.max(20, Math.floor((62 - this.s) / k)) === 0)
+      for (let n = 1 + (Math.random() * 2 | 0), i = 0; i < n; i++) {
+        const x = 50 + Math.random() * 260, b = Math.random() < .12 + k * .04, q = FR[Math.random() * 6 | 0];
+        this.f.push({ x, y: 500, vx: (180 - x) / 100 + Math.random() - .5, vy: -(9.6 + Math.random() * 2), r: 20, b, e: b ? '💣' : q[0], c: q[1] });
+      }
+    this.f.forEach(f => {
+      f.x += f.vx; f.y += f.vy; f.vy += .2;
+      if (f.y > 510 && f.vy > 0 && !f.s && !f.b && !f.m) { f.m = 1; beep(150, .1); if (--this.lv <= 0) this.end(); }
+    });
+    this.f = this.f.filter(f => !f.s && (f.y < 520 || f.vy < 0));
+  },
+  draw() {
+    backdrop();
+    c.textAlign = 'center'; c.font = '38px serif';
+    this.f.forEach(f => c.fillText(f.e, f.x, f.y + 12));
+    c.lineCap = 'round'; c.lineWidth = 5;
+    for (let i = 1; i < this.tr.length; i++) { c.strokeStyle = `rgba(255,255,255,${this.tr[i].l / 10})`; c.beginPath(); c.moveTo(this.tr[i - 1].x, this.tr[i - 1].y); c.lineTo(this.tr[i].x, this.tr[i].y); c.stroke(); }
+    c.fillStyle = '#f4efe6'; c.font = "22px 'Press Start 2P',monospace"; c.fillText(this.s, 180, 50);
+    c.textAlign = 'left'; c.font = '14px serif'; c.fillText('❤️'.repeat(Math.max(0, this.lv)), 10, 28);
+    info('Sliced ' + this.s + '   Best ' + (D.best.ninja || 0));
+    if (!this.go) banner('FRUIT SLICE', 'Swipe to slice fruit', 'Avoid the bombs!');
+    else if (this.dead) banner('GAME OVER', 'Tap to retry', '+' + this.got + ' coins');
+  }
+};
+
+/* ---------- Tower defense ---------- */
+const PATH = [[-20, 90], [270, 90], [270, 210], [90, 210], [90, 330], [270, 330], [270, 450], [380, 450]];
+const PL = PATH.slice(1).map((p, i) => Math.hypot(p[0] - PATH[i][0], p[1] - PATH[i][1]));
+const PT = PL.reduce((a, b) => a + b, 0);
+function ppos(d) {
+  let i = 0; while (i < PL.length - 1 && d > PL[i]) { d -= PL[i]; i++; }
+  const a = PATH[i], b = PATH[i + 1], t = d / PL[i];
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+}
+const onPath = (x, y) => PATH.slice(1).some((p, i) => segD(x, y, PATH[i][0], PATH[i][1], p[0], p[1]) < 38);
+const TD = {
+  init() { this.tw = {}; this.e = []; this.shots = []; this.gold = 60; this.lv = 10; this.wave = 0; this.q = 0; this.pz = 100; this.sc = 0; this.k = 0; this.dead = false; this.go = false; this.got = 0; },
+  act() { if (this.dead) { if (performance.now() - this.dt < 400) return; this.init(); } this.go = true; },
+  tap(x, y) {
+    if (!this.go || this.dead) { this.act(); return; }
+    const cx = x / 60 | 0, cy = y / 60 | 0, key = cx + ',' + cy, px = cx * 60 + 30, py = cy * 60 + 30;
+    if (onPath(px, py)) return;
+    const t = this.tw[key];
+    if (!t) { if (this.gold >= 25) { this.gold -= 25; this.tw[key] = { x: px, y: py, l: 1, cd: 0 }; beep(600, .05); } }
+    else if (t.l < 3 && this.gold >= 20 * t.l) { this.gold -= 20 * t.l; t.l++; beep(800, .06); }
+  },
+  step() {
+    if (!this.go || this.dead) return;
+    const k = LV[D.lvl].sp / 4;
+    if (!this.q && !this.e.length) { if (++this.pz > 150) { this.wave++; this.q = 5 + this.wave * 2; this.pz = 0; toast('Wave ' + this.wave); } }
+    else if (this.q > 0 && ++this.sc >= 40) { this.sc = 0; this.q--; const h = 2 + this.wave * 1.5; this.e.push({ d: 0, hp: h, mx: h }); }
+    this.e.forEach(n => n.d += (1 + this.wave * .04) * k * 1.1);
+    this.shots = this.shots.filter(s => --s.l > 0);
+    Object.values(this.tw).forEach(t => {
+      if (--t.cd > 0) return;
+      let best = null, bd = -1;
+      this.e.forEach(n => { const [ex, ey] = ppos(n.d); if (Math.hypot(ex - t.x, ey - t.y) < 80 + t.l * 12 && n.d > bd) { best = n; bd = n.d; } });
+      if (best) { best.hp -= 1.5 * t.l; t.cd = 36 - t.l * 7; const [ex, ey] = ppos(best.d); this.shots.push({ x1: t.x, y1: t.y, x2: ex, y2: ey, l: 5 }); beep(400, .02); }
+    });
+    this.e.forEach(n => {
+      if (n.x) return;
+      if (n.hp <= 0) { n.x = 1; this.gold += 4; this.k++; const [ex, ey] = ppos(n.d); burst(ex, ey, '#ffc857', 8); }
+      else if (n.d >= PT) { n.x = 1; this.lv--; shake = 6; beep(120, .15); }
+    });
+    this.e = this.e.filter(n => !n.x);
+    if (this.lv <= 0) { this.dead = true; this.dt = performance.now(); stat('plays'); rec('td', this.k); this.got = earn(this.k, 'td'); beep(120, .3); }
+  },
+  draw() {
+    backdrop();
+    c.lineCap = 'round'; c.lineJoin = 'round'; c.strokeStyle = '#3a3658'; c.lineWidth = 44; c.beginPath();
+    PATH.forEach((p, i) => i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1])); c.stroke();
+    c.fillStyle = 'rgba(255,255,255,.05)';
+    for (let i = 0; i < 6; i++) for (let j = 0; j < 8; j++) if (!onPath(i * 60 + 30, j * 60 + 30)) c.fillRect(i * 60 + 4, j * 60 + 4, 52, 52);
+    c.textAlign = 'center';
+    Object.values(this.tw).forEach(t => {
+      c.fillStyle = col(item(D.eq.b).c); c.beginPath(); c.arc(t.x, t.y, 14 + t.l * 2, 0, 7); c.fill();
+      c.fillStyle = '#1d1b2f'; c.font = "10px 'Press Start 2P',monospace"; c.fillText(t.l, t.x, t.y + 4);
+    });
+    c.strokeStyle = '#ffc857'; c.lineWidth = 3;
+    this.shots.forEach(s => { c.beginPath(); c.moveTo(s.x1, s.y1); c.lineTo(s.x2, s.y2); c.stroke(); });
+    this.e.forEach(n => {
+      const [x, y] = ppos(n.d);
+      c.fillStyle = '#ff5d73'; c.beginPath(); c.arc(x, y, 11, 0, 7); c.fill();
+      c.fillStyle = 'rgba(0,0,0,.4)'; c.fillRect(x - 12, y - 19, 24, 4);
+      c.fillStyle = '#5eead4'; c.fillRect(x - 12, y - 19, 24 * Math.max(0, n.hp / n.mx), 4);
+    });
+    info('Wave ' + this.wave + '  Gold ' + this.gold + '  Lives ' + this.lv + '  Kills ' + this.k);
+    if (!this.go) banner('DEFENSE', 'Tap a tile to build (25)', 'Tap a tower to upgrade');
+    else if (this.dead) banner('BASE LOST', 'Tap to retry', '+' + this.got + ' coins');
+  }
+};
+cv.addEventListener('pointerdown', e => {
+  const [x, y] = cp(e);
+  if (cur === 'ninja') { NJ.act(); NJ.last = [x, y]; }
+  else if (cur === 'invaders') { INV.act(); INV.px = x; }
+  else if (cur === 'td') TD.tap(x, y);
+});
+cv.addEventListener('pointermove', e => {
+  const [x, y] = cp(e);
+  if (cur === 'ninja' && NJ.last) NJ.slice(x, y); else if (cur === 'invaders') INV.px = x;
+});
+cv.addEventListener('pointerup', () => { NJ.last = null; });
+document.addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if (cur === 'invaders' && [' ', 'arrowleft', 'arrowright'].includes(k)) { e.preventDefault(); if (k === ' ') INV.act(); }
+  if (cur === 'word') { if (k === 'enter') wkey('⏎'); else if (k === 'backspace') wkey('⌫'); else if (k.length === 1) wkey(k); }
+});
+
+/* ---------- Cookie clicker ---------- */
+let ckT;
+const CK = [
+  { id: 'c', n: '👆 Stronger tap', b: 20, d: '+1 per tap' },
+  { id: 'g', n: '👵 Grandma', b: 50, d: '+1 per second' },
+  { id: 'f', n: '🌾 Farm', b: 300, d: '+5 per second' },
+  { id: 'x', n: '🏭 Factory', b: 1500, d: '+20 per second' }
+];
+const ckCost = u => Math.ceil(u.b * Math.pow(1.15, D.ck.u[u.id] || 0));
+const ckCps = () => (D.ck.u.g || 0) + 5 * (D.ck.u.f || 0) + 20 * (D.ck.u.x || 0);
+function ckNums() {
+  if (cur !== 'cookie' || !$('#ckn')) return;
+  $('#ckn').textContent = Math.floor(D.ck.n) + ' 🍪';
+  $('#ckp').textContent = ckCps() + ' per sec, ' + (1 + (D.ck.u.c || 0)) + ' per tap';
+  document.querySelectorAll('#cookie [data-u]').forEach(b => b.disabled = D.ck.n < ckCost(CK.find(u => u.id === b.dataset.u)));
+  $('#cookie [data-cash]').disabled = D.ck.n < 500;
+  info(Math.floor(D.ck.n) + ' cookies');
+}
+function ckRender() {
+  $('#cookie').innerHTML = `<button id="ckb" aria-label="Cookie">🍪</button><div class="row"><span><b id="ckn"></b><br><small id="ckp"></small></span><button data-cash="1">500 🍪 → 3 🪙</button></div>` +
+    CK.map(u => `<div class="row"><span>${u.n} (${D.ck.u[u.id] || 0})<br><small>${u.d}</small></span><button data-u="${u.id}">${ckCost(u)} 🍪</button></div>`).join('');
+  ckNums();
+}
+function cookieInit() {
+  const away = Math.floor(Math.min((Date.now() - D.ck.t) / 1000, 3600) * ckCps() * .5);
+  if (away > 0) { D.ck.n += away; D.ck.tot += away; toast('Welcome back! +' + away + ' 🍪'); }
+  D.ck.t = Date.now(); ckRender(); clearInterval(ckT);
+  ckT = setInterval(() => { const g = ckCps(); D.ck.n += g; D.ck.tot += g; D.ck.t = Date.now(); store(); ckNums(); }, 1000);
+}
+$('#cookie').onclick = e => {
+  const t = e.target.closest('button'); if (!t) return;
+  if (t.id === 'ckb') { const g = 1 + (D.ck.u.c || 0); D.ck.n += g; D.ck.tot += g; beep(500, .02); }
+  else if (t.dataset.u) {
+    const u = CK.find(x => x.id === t.dataset.u), cost = ckCost(u);
+    if (D.ck.n >= cost) { D.ck.n -= cost; D.ck.u[u.id] = (D.ck.u[u.id] || 0) + 1; beep(700, .05); ckRender(); }
+  } else if (t.dataset.cash && D.ck.n >= 500) { D.ck.n -= 500; D.coins += 3; D.st.earned += 3; coinUI(); toast('+3 🪙 cash out'); beep(880, .1); }
+  store(); ckNums();
+};
+
+/* ---------- Word guess ---------- */
+const WORDS = 'apple bread crane drive eagle flame grape house input joker knife lemon mouse night ocean piano queen river snake tiger uncle vivid water zebra brick cloud dance earth field giant heart ivory juice light money nurse olive pearl quiet robot stone table voice wheel young beach candy dream frost glass happy jelly laser magic novel'.split(' ');
+let WD = {};
+const wst = (g, i) => g[i] === WD.w[i] ? 'ok' : WD.w.includes(g[i]) ? 'in' : 'no';
+function wordInit() { WD = { w: WORDS[Math.random() * WORDS.length | 0], g: [], cur: '', over: false }; wordRender(); info('Guess the 5-letter word'); }
+function wordRender() {
+  let h = '';
+  for (let r = 0; r < 6; r++) {
+    const g = WD.g[r], t = g || (r === WD.g.length ? WD.cur : '');
+    h += '<div class="wr">' + [0, 1, 2, 3, 4].map(i => `<i class="${g ? wst(g, i) : ''}">${t[i] || ''}</i>`).join('') + '</div>';
+  }
+  const ks = {};
+  WD.g.forEach(g => [...g].forEach((ch, i) => { const st = wst(g, i); if (ks[ch] !== 'ok' && (st === 'ok' || st === 'in' || !ks[ch])) ks[ch] = st; }));
+  h += ['qwertyuiop', 'asdfghjkl', '⏎zxcvbnm⌫'].map(r => '<div class="kr">' + [...r].map(ch => `<button data-k="${ch}" class="${ks[ch] || ''}">${ch}</button>`).join('') + '</div>').join('');
+  $('#word').innerHTML = h;
+}
+function wkey(k) {
+  if (cur !== 'word' || WD.over) return;
+  if (k === '⌫') WD.cur = WD.cur.slice(0, -1);
+  else if (k === '⏎') {
+    if (WD.cur.length < 5) { toast('Need 5 letters'); return; }
+    WD.g.push(WD.cur); const win = WD.cur === WD.w; WD.cur = '';
+    if (win || WD.g.length === 6) {
+      WD.over = true; stat('plays');
+      if (win) earn(Math.max(5, 14 - WD.g.length * 2), 'word win');
+      info(win ? 'Solved in ' + WD.g.length + '!' : 'The word was ' + WD.w.toUpperCase());
+      $('#again').hidden = false;
+    }
+  } else if (/^[a-z]$/.test(k) && WD.cur.length < 5) WD.cur += k;
+  wordRender();
+}
+$('#word').onclick = e => { const k = e.target.dataset.k; if (k) { e.target.blur(); wkey(k); } };
+
+const CG = { flappy: F, snake: S, pong: P, traffic: TR, runner: RN, invaders: INV, ninja: NJ, td: TD };
 
 /* ---------- Tic-Tac-Toe (you = X) ---------- */
 const L = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
@@ -688,8 +948,8 @@ $('#lvl').onclick = e => {
   e.target.blur(); D.lvl = l; store(); lvlUI(); show(cur);
 };
 
-const GAMES = ['flappy', 'snake', 'traffic', 'runner', 'pong', 'ttt', 'mem', 'wh'];
-const GI = { flappy: ['🐤', 'Flappy'], snake: ['🐍', 'Snake'], pong: ['🏓', 'Pong'], traffic: ['🚗', 'Traffic'], runner: ['🏃', 'Runner'], ttt: ['❌', 'Tic-Tac-Toe'], mem: ['🃏', 'Memory'], wh: ['🐹', 'Whack'] };
+const GAMES = ['flappy', 'snake', 'traffic', 'runner', 'invaders', 'ninja', 'td', 'word', 'cookie', 'pong', 'ttt', 'mem', 'wh'];
+const GI = { flappy: ['🐤', 'Flappy'], snake: ['🐍', 'Snake'], pong: ['🏓', 'Pong'], invaders: ['👾', 'Invaders'], ninja: ['🍉', 'Fruit Slice'], td: ['🏰', 'Defense'], word: ['🔤', 'Word Guess'], cookie: ['🍪', 'Cookies'], traffic: ['🚗', 'Traffic'], runner: ['🏃', 'Runner'], ttt: ['❌', 'Tic-Tac-Toe'], mem: ['🃏', 'Memory'], wh: ['🐹', 'Whack'] };
 function homeRender() {
   $('#home').innerHTML = GAMES.map(g => {
     const b = D.best[g], t = b === undefined ? 'Play' : g === 'mem' ? b + ' moves' : 'Best ' + b;
@@ -700,8 +960,13 @@ function homeRender() {
 $('#home').onclick = e => { const b = e.target.closest('[data-g]'); if (b) show(b.dataset.g); };
 
 /* ---------- Shell & input ---------- */
-const VIEW = { home: 'home', traffic: 'cv', runner: 'cv', flappy: 'cv', snake: 'cv', pong: 'cv', ttt: 'ttt', mem: 'mem', wh: 'wh', shop: 'shop', goals: 'goals', prof: 'prof' };
+const VIEW = { home: 'home', invaders: 'cv', ninja: 'cv', td: 'cv', cookie: 'cookie', word: 'word', traffic: 'cv', runner: 'cv', flappy: 'cv', snake: 'cv', pong: 'cv', ttt: 'ttt', mem: 'mem', wh: 'wh', shop: 'shop', goals: 'goals', prof: 'prof' };
 const TIPS = {
+  invaders: 'Drag or use arrow keys to move. Your ship fires on its own.',
+  ninja: 'Swipe across fruit to slice it. Missing 3 ends the game, and bombs end it instantly.',
+  td: 'Tap a tile to build a tower, tap a tower to upgrade it. Stop enemies reaching the end.',
+  word: 'Green is right, yellow is the wrong spot. Six tries.',
+  cookie: 'Tap the cookie, buy upgrades, and cash out cookies for coins. It keeps baking while you are away.',
   traffic: 'Tap the left or right side of the road, or use the arrow keys.',
   runner: 'Tap or Space to jump, swipe down or press down to slide. Grab coins!',
   home: 'Win games to earn coins, then spend them in the Shop.',
@@ -716,13 +981,13 @@ const TIPS = {
   prof: 'Set your name, check your stats, share your scores.'
 };
 function show(g) {
-  cur = g; whStop(); parts.length = 0; boxMsg = ''; $('#lvl').hidden = !GAMES.includes(g);
+  cur = g; whStop(); clearInterval(ckT); parts.length = 0; boxMsg = ''; $('#lvl').hidden = !GAMES.includes(g);
   const tab = GAMES.includes(g) ? 'home' : g;
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === tab));
   $('#bar').hidden = !GAMES.includes(g); if (GI[g]) $('#gt').textContent = GI[g][0] + ' ' + GI[g][1];
-  ['home', 'cv', 'ttt', 'mem', 'wh', 'shop', 'goals', 'prof'].forEach(id => $('#' + id).hidden = id !== VIEW[g]);
+  ['home', 'cv', 'ttt', 'mem', 'wh', 'cookie', 'word', 'shop', 'goals', 'prof'].forEach(id => $('#' + id).hidden = id !== VIEW[g]);
   $('#again').hidden = true; $('#again').textContent = 'Play again'; $('#tip').textContent = TIPS[g];
-  if (CG[g]) CG[g].init(); else ({ home: homeRender, ttt: tttInit, mem: memInit, wh: whInit, shop: shopRender, goals: goalsRender, prof: profRender })[g]();
+  if (CG[g]) CG[g].init(); else ({ cookie: cookieInit, word: wordInit, home: homeRender, ttt: tttInit, mem: memInit, wh: whInit, shop: shopRender, goals: goalsRender, prof: profRender })[g]();
 }
 $('#tabs').onclick = e => { const b = e.target.closest('button'); if (b) { b.blur(); show(b.dataset.t); } };
 $('#back').onclick = () => show('home');
@@ -774,4 +1039,6 @@ theme(); coinUI(); qReset(); dailyUI(); lvlUI(); show('home');
 </script>
 </body>
 </html>
+
+
 
