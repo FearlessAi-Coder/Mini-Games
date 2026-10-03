@@ -1135,8 +1135,6 @@ cv.addEventListener('pointercancel', () => { if (cur === 'runner') { RN.slide(0)
   requestAnimationFrame(tick);
 })();
 theme(); coinUI(); qReset(); dailyUI(); lvlUI(); show('home');
-/* ===== POLISH PATCH: paste this whole block right BEFORE the last line:
-   theme(); coinUI(); qReset(); dailyUI(); lvlUI(); show('home');  ===== */
 
 /* ---------- Extra CSS ---------- */
 document.head.appendChild(Object.assign(document.createElement('style'), { textContent: `
@@ -1299,8 +1297,10 @@ wordRender = function () {
   };
 }
 
-/* ---------- Apply vignette to every canvas game (keep this LAST in the patch) ---------- */
+/* ---------- Apply vignette to every canvas game ---------- */
 Object.values(CG).forEach(g => { const d = g.draw; g.draw = function () { d.call(this); vig(); }; });
+
+
 /* ===== COLOR + FIX PATCH =====
    Paste this whole block right BEFORE the last line:
    theme(); coinUI(); qReset(); dailyUI(); lvlUI(); show('home');
@@ -1445,9 +1445,10 @@ wordRender = function () {
   $('#word').innerHTML = h;
 };
 document.addEventListener('keydown', e => { if (cur === 'word' && (e.ctrlKey || e.metaKey || e.altKey)) e.stopImmediatePropagation(); }, true);
+
 theme();
-/* ===== PATCH 2: Escape game + level slider + drawn icons =====
-   Paste right ABOVE </script>, after the other patches. Nothing else to add. */
+
+/* ===== PATCH 2: Escape game + level slider + drawn icons ===== */
 
 if (!CanvasRenderingContext2D.prototype.roundRect) CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
   r = Math.min(r || 0, w / 2, h / 2); this.moveTo(x + r, y); this.arcTo(x + w, y, x + w, y + h, r);
@@ -1550,30 +1551,4 @@ homeRender = function () {
 /* ---------- Level slider with face ---------- */
 const FACE = l => {
   const k = { easy: ['#5be37a', 'M24 40q8 8 16 0'], normal: ['#ffc857', 'M24 42h16'], hard: ['#ff5d73', 'M24 45q8-9 16 0'] }[l], H = l === 'hard';
-  return `<svg viewBox="0 0 64 64" width="48" height="48">${H ? '<path d="M8 12q10 2 15 16M56 12q-10 2-15 16" stroke="#111" stroke-width="7" fill="none" stroke-linecap="round"/>' : ''}<circle cx="32" cy="36" r="22" fill="${k[0]}" stroke="#111" stroke-width="5"/><circle cx="24" cy="33" r="3" fill="#111"/><circle cx="40" cy="33" r="3" fill="#111"/>${H ? '<path d="M18 26l11 5M46 26l-11 5" stroke="#111" stroke-width="3.5"/>' : ''}<path d="${k[1]}" stroke="#111" stroke-width="3.5" fill="none" stroke-linecap="round"/></svg>`;
-};
-const LCOL = { easy: '#2fb860', normal: '#e6a100', hard: '#ff4d4d' };
-function lvlText() { $('#lf').innerHTML = FACE(D.lvl); $('#ln').style.color = LCOL[D.lvl]; $('#ln').innerHTML = D.lvl.toUpperCase() + ' <small>x' + LV[D.lvl].m + ' coins</small>'; }
-lvlUI = function () {
-  $('#lvl').innerHTML = `<span id="lf"></span><div style="flex:1"><div id="ln"></div><input id="lr" type="range" min="0" max="2" step="1" value="${Object.keys(LV).indexOf(D.lvl)}" aria-label="Difficulty"></div>`;
-  lvlText();
-};
-$('#lvl').addEventListener('input', e => { if (e.target.id === 'lr') { D.lvl = Object.keys(LV)[+e.target.value]; store(); lvlText(); } });
-$('#lvl').addEventListener('change', e => { if (e.target.id === 'lr') show(cur); });
-
-document.head.appendChild(Object.assign(document.createElement('style'), { textContent: `
-.ic{width:80px;height:80px;border-radius:24px;background:rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;box-shadow:inset 0 -5px 0 rgba(0,0,0,.14),0 4px 10px rgba(0,0,0,.15)}
-.card[data-g=escape]{background:linear-gradient(160deg,#ff9a5a,#c2512b)}
-#lvl{display:flex;align-items:center;gap:12px;width:100%;max-width:380px;background:#f6e6cf;padding:8px 14px;border-radius:20px;box-shadow:0 6px 18px rgba(0,0,0,.25)}
-#ln{font-size:20px;font-weight:800}#ln small{font-size:12px;color:#8a6a55}
-#lr{-webkit-appearance:none;appearance:none;width:100%;height:18px;padding:0;margin-top:4px;border:3px solid #fff;border-radius:99px;background:linear-gradient(90deg,#5be37a,#ffc857,#ff5d73,#a23ad6)}
-#lr::-webkit-slider-thumb{-webkit-appearance:none;width:30px;height:30px;border-radius:50%;background:#ff5d73;border:5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35)}
-#lr::-moz-range-thumb{width:20px;height:20px;border-radius:50%;background:#ff5d73;border:5px solid #fff}
-` }));
-
-theme(); lvlUI(); show('home');
-</script>
-</body>
-</html>
-
-
+  return `<svg viewBox="0 0 64 64" width="48" height="48">${H ? '<path d="M8 12q10 2 15 16M56 12q-10 2-15 16" stroke="#111" stroke-width="7" fill="none" stroke-linecap="round"/>' : ''}<circle cx="32" cy="36" r="22" fill="${k[0]}" stroke="#111" stroke-width="5"/><circle cx="24" cy="33" r="3" fill="#111"/><circle cx="40" cy="33" r="3" fill="#111"/>${H ? '<path d="M18 26l11 5M46 26l-11 5" stroke="#111" stroke-width="3.5"/>' : ''}<path d="${k[1]}" stroke="#111" stroke-width="3.5" fill="none" stroke-linecap="round"/></s
