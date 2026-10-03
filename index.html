@@ -1301,7 +1301,151 @@ wordRender = function () {
 
 /* ---------- Apply vignette to every canvas game (keep this LAST in the patch) ---------- */
 Object.values(CG).forEach(g => { const d = g.draw; g.draw = function () { d.call(this); vig(); }; });
+/* ===== COLOR + FIX PATCH =====
+   Paste this whole block right BEFORE the last line:
+   theme(); coinUI(); qReset(); dailyUI(); lvlUI(); show('home');
+   (after the polish patch) */
 
+/* ---- older phones: roundRect polyfill (can blank Defense) ---- */
+if (!CanvasRenderingContext2D.prototype.roundRect) CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+  r = Math.min(r || 0, w / 2, h / 2); this.moveTo(x + r, y); this.arcTo(x + w, y, x + w, y + h, r);
+  this.arcTo(x + w, y + h, x, y + h, r); this.arcTo(x, y + h, x, y, r); this.arcTo(x, y, x + w, y, r); this.closePath();
+};
+
+/* ---- bright default theme, no dark vignette ---- */
+item('t0').c = ['#6a3df0', '#b25cff', '#3b1fa8'];
+vig = function () {};
+RATE.td = .5;
+
+/* ---- colorful UI ---- */
+document.head.appendChild(Object.assign(document.createElement('style'), { textContent: `
+body{background:linear-gradient(160deg,var(--panel),var(--bg)) fixed!important}
+.card b{text-shadow:0 2px 0 rgba(0,0,0,.2)}.card small{color:#fff;opacity:.92}
+.card[data-g=flappy]{background:linear-gradient(160deg,#4ec0ff,#2b7bff)}
+.card[data-g=snake]{background:linear-gradient(160deg,#5be37a,#1fa85a)}
+.card[data-g=traffic]{background:linear-gradient(160deg,#ffa94d,#ff5d3a)}
+.card[data-g=runner]{background:linear-gradient(160deg,#ffd84a,#ff9a2b)}
+.card[data-g=invaders]{background:linear-gradient(160deg,#b97bff,#6a3df0)}
+.card[data-g=ninja]{background:linear-gradient(160deg,#ff7a90,#ff3d6e)}
+.card[data-g=td]{background:linear-gradient(160deg,#5eead4,#2b9fd8)}
+.card[data-g=word]{background:linear-gradient(160deg,#ffe066,#ffa51f)}
+.card[data-g=cookie]{background:linear-gradient(160deg,#e0a26a,#b0642c)}
+.card[data-g=pong]{background:linear-gradient(160deg,#8d9bff,#4a4fe0)}
+.card[data-g=ttt]{background:linear-gradient(160deg,#4fdcff,#1a9ee0)}
+.card[data-g=mem]{background:linear-gradient(160deg,#ff86c2,#e0488f)}
+.card[data-g=wh]{background:linear-gradient(160deg,#9be85a,#4bb02e)}
+.row{background:rgba(255,255,255,.16)}
+#tabs{background:rgba(60,30,140,.88)}
+#tabs button.on{background:var(--gold);color:#1d1b2f}
+#ttt button{background:linear-gradient(160deg,#4fdcff,#1a9ee0);color:#fff;text-shadow:0 2px 0 rgba(0,0,0,.25)}
+#mem button{background:linear-gradient(160deg,#ff86c2,#e0488f)}
+#wh{background:#5bbf4a;padding:10px;border-radius:22px}
+#wh button{background:radial-gradient(ellipse at 50% 70%,#3b2412 0 44%,#86e063 46%)}
+.wr i{background:rgba(255,255,255,.22)}
+.wr i.ok,.kr button.ok{background:#2fd17a;color:#fff}
+.wr i.in,.kr button.in{background:#ffa51f;color:#fff}
+.wr i.no,.kr button.no{background:#6b5d9e;color:#d8d0f5}
+.kr button{background:#8d9bff;color:#fff}
+#ckb{background:radial-gradient(circle,#ffd89a,#c98a4a)}
+` }));
+
+/* ---- colorful canvas backgrounds per game ---- */
+const BG = { flappy: ['#4ec0ff', '#c8f1ff'], snake: ['#4fd17a', '#2a9d5c'], pong: ['#2b6cff', '#7a3cff'], traffic: ['#4fd17a', '#2f9e58'], runner: ['#ff8a5c', '#ffe08a'], invaders: ['#1b0f5c', '#6a2fb8'], ninja: ['#7a4bd6', '#ff7ab8'], td: ['#5a3fc0', '#9a6bff'] };
+backdrop = function () {
+  const b = BG[cur] || BG.pong, g = c.createLinearGradient(0, 0, 0, 480);
+  g.addColorStop(0, b[0]); g.addColorStop(1, b[1]); c.fillStyle = g; c.fillRect(0, 0, 360, 480);
+  if (cur === 'snake') { c.fillStyle = 'rgba(255,255,255,.08)'; for (let x = 0; x < 18; x++) for (let y = 0; y < 24; y++) if ((x + y) % 2) c.fillRect(x * 20, y * 20, 20, 20); }
+  else if (cur === 'flappy' || cur === 'runner') {
+    c.fillStyle = 'rgba(255,255,255,.85)';
+    for (let i = 0; i < 4; i++) { const x = ((i * 130 - fr * .4 * (1 + i % 2)) % 520 + 520) % 520 - 80, y = 60 + i * 70; c.beginPath(); c.arc(x, y, 16, 0, 7); c.arc(x + 18, y - 6, 20, 0, 7); c.arc(x + 38, y, 15, 0, 7); c.fill(); }
+  } else { c.fillStyle = 'rgba(255,255,255,.5)'; stars.forEach(s => c.fillRect((((s.x - fr * s.s * .2) % 360) + 360) % 360, s.y, s.s, s.s)); }
+};
+
+/* ---- Flappy: green pipes, cute bird ---- */
+F.draw = function () {
+  backdrop(); const gh = LV[D.lvl].gap;
+  this.p.forEach(o => [[0, o.g - gh], [o.g + gh, 480]].forEach(([a, b], i) => {
+    c.fillStyle = '#4cc23a'; c.fillRect(o.x, a, 46, b - a);
+    c.fillStyle = '#9af56a'; c.fillRect(o.x + 6, a, 8, b - a);
+    c.fillStyle = '#2f8f2a'; c.fillRect(o.x + 36, a, 10, b - a);
+    const cy = i ? o.g + gh : o.g - gh - 16;
+    c.fillStyle = '#5fe04a'; c.fillRect(o.x - 4, cy, 54, 16); c.fillStyle = '#2f8f2a'; c.fillRect(o.x - 4, cy + 12, 54, 4);
+  }));
+  if (!(this.inv && this.inv % 6 < 3)) {
+    const bc = col(item(D.eq.b).c);
+    c.save(); c.translate(80, this.y); c.rotate(clamp(this.v / 10, -.5, 1));
+    c.fillStyle = bc; c.beginPath(); c.arc(0, 0, 13, 0, 7); c.fill();
+    c.fillStyle = 'rgba(255,255,255,.7)'; c.beginPath(); c.ellipse(1, 6, 8, 5, 0, 0, 7); c.fill();
+    c.fillStyle = 'rgba(0,0,0,.25)'; c.beginPath(); c.ellipse(-5, 2 + Math.sin(fr / 3) * 3, 7, 4, 0, 0, 7); c.fill();
+    c.fillStyle = '#fff'; c.beginPath(); c.arc(6, -5, 5, 0, 7); c.fill();
+    c.fillStyle = '#111'; c.beginPath(); c.arc(8, -5, 2.4, 0, 7); c.fill();
+    c.fillStyle = '#ff7a2f'; c.fillRect(11, 0, 9, 6); c.restore();
+  }
+  c.textAlign = 'center'; c.lineWidth = 5; c.strokeStyle = 'rgba(0,0,0,.35)'; c.font = "22px 'Press Start 2P',monospace";
+  c.strokeText(this.s, 180, 60); c.fillStyle = '#fff'; c.fillText(this.s, 180, 60);
+  if (this.sh) { c.textAlign = 'right'; c.font = '16px serif'; c.fillText('🛡️', 346, 30); }
+  info('Score ' + this.s + '   Best ' + (D.best.flappy || 0));
+  if (!this.go) banner('FLAPPY', 'Tap to start');
+  else if (this.dead) banner('GAME OVER', 'Tap to retry', '+' + this.got + ' coins');
+};
+
+/* ---- Defense: fixed + rebalanced ---- */
+TD.init = function () { this.tw = {}; this.e = []; this.shots = []; this.gold = 100; this.lv = 15; this.wave = 0; this.q = 0; this.pz = 60; this.sc = 0; this.k = 0; this.dead = false; this.go = false; this.got = 0; };
+TD.tap = function (x, y) {
+  if (this.dead) { this.act(); return; }
+  this.go = true;
+  const cx = x / 60 | 0, cy = y / 60 | 0, key = cx + ',' + cy, px = cx * 60 + 30, py = cy * 60 + 30;
+  if (cx > 5 || cy > 7 || onPath(px, py)) return;
+  const t = this.tw[key];
+  if (!t) { if (this.gold >= 25) { this.gold -= 25; this.tw[key] = { x: px, y: py, l: 1, cd: 0 }; beep(600, .05); burst(px, py, '#5eead4', 8); } else toast('Need 25 gold'); }
+  else if (t.l < 3) { if (this.gold >= 20 * t.l) { this.gold -= 20 * t.l; t.l++; beep(800, .06); burst(px, py, '#ffc857', 10); } else toast('Need ' + 20 * t.l + ' gold'); }
+};
+TD.step = function () {
+  if (!this.go || this.dead) return;
+  const k = LV[D.lvl].sp / 4;
+  if (!this.q && !this.e.length) { if (++this.pz > 150) { this.wave++; this.q = 5 + this.wave * 2; this.pz = 0; this.gold += 10 + this.wave * 2; toast('Wave ' + this.wave + ' (+bonus gold)'); } }
+  else if (this.q > 0 && ++this.sc >= 40) { this.sc = 0; this.q--; const h = 3 + this.wave * 1.8; this.e.push({ d: 0, hp: h, mx: h }); }
+  this.e.forEach(n => n.d += (.9 + this.wave * .03) * k);
+  this.shots = this.shots.filter(s => --s.l > 0);
+  Object.values(this.tw).forEach(t => {
+    if (--t.cd > 0) return;
+    let best = null, bd = -1;
+    this.e.forEach(n => { const [ex, ey] = ppos(n.d); if (n.hp > 0 && Math.hypot(ex - t.x, ey - t.y) < 85 + t.l * 15 && n.d > bd) { best = n; bd = n.d; } });
+    if (best) { best.hp -= 2 * t.l; t.cd = 30 - t.l * 6; const [ex, ey] = ppos(best.d); this.shots.push({ x1: t.x, y1: t.y, x2: ex, y2: ey, l: 5 }); beep(400, .02); }
+  });
+  this.e.forEach(n => {
+    if (n.x) return;
+    if (n.hp <= 0) { n.x = 1; this.gold += 5; this.k++; const [ex, ey] = ppos(n.d); burst(ex, ey, '#ffc857', 8); }
+    else if (n.d >= PT) { n.x = 1; this.lv--; shake = 6; beep(120, .15); }
+  });
+  this.e = this.e.filter(n => !n.x);
+  if (this.lv <= 0) { this.dead = true; this.dt = performance.now(); stat('plays'); rec('td', this.k); this.got = earn(this.k, 'td'); beep(120, .3); }
+};
+
+/* ---- Word Guess: correct duplicate letters, colorful tiles ---- */
+WORDS.push(...'adult angle bacon cabin daily elbow fancy grain habit icing jolly kiosk lunch maple noble opera pizza quick radio sugar toast unity vapor waltz yacht zesty pride smile storm sweet train'.split(' '));
+function wstates(g) {
+  const r = Array(5).fill('no'), left = {};
+  [...WD.w].forEach((ch, i) => { if (g[i] === ch) r[i] = 'ok'; else left[ch] = (left[ch] || 0) + 1; });
+  [...g].forEach((ch, i) => { if (r[i] !== 'ok' && left[ch] > 0) { r[i] = 'in'; left[ch]--; } });
+  return r;
+}
+wordRender = function () {
+  const n = WD.g.length, fresh = WD._n !== n ? n - 1 : -1; WD._n = n;
+  let h = '';
+  for (let r = 0; r < 6; r++) {
+    const g = WD.g[r], t = g || (r === n ? WD.cur : ''), s = g ? wstates(g) : [];
+    const rc = (r === n && WD.sk ? ' sk' : '') + (r === n - 1 && WD.over && g === WD.w ? ' bn' : '');
+    h += `<div class="wr${rc}">` + [0, 1, 2, 3, 4].map(i =>
+      `<i class="${s[i] || ''}${r === fresh ? ' fl' : ''}${r === n && i === t.length - 1 ? ' pp' : ''}" style="--d:${i}">${t[i] || ''}</i>`).join('') + '</div>';
+  }
+  const ks = {};
+  WD.g.forEach(g => { const s = wstates(g); [...g].forEach((ch, i) => { if (ks[ch] !== 'ok' && (s[i] === 'ok' || s[i] === 'in' || !ks[ch])) ks[ch] = s[i]; }); });
+  h += ['qwertyuiop', 'asdfghjkl', '⏎zxcvbnm⌫'].map(r => '<div class="kr">' + [...r].map(ch => `<button data-k="${ch}" class="${ks[ch] || ''}">${ch}</button>`).join('') + '</div>').join('');
+  $('#word').innerHTML = h;
+};
+document.addEventListener('keydown', e => { if (cur === 'word' && (e.ctrlKey || e.metaKey || e.altKey)) e.stopImmediatePropagation(); }, true);
+theme();
 </script>
 </body>
 </html>
