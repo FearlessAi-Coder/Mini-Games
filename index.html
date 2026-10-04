@@ -1516,6 +1516,17 @@ TIPS.escape = 'Drag cars along their lane to clear a path, then slide the red ca
 cv.addEventListener('pointerdown', e => { if (cur === 'escape') ES.down(...cp(e)); });
 cv.addEventListener('pointermove', e => { if (cur === 'escape') ES.move(...cp(e)); });
 ['pointerup', 'pointercancel', 'pointerleave'].forEach(t => cv.addEventListener(t, () => { if (cur === 'escape') ES.up(); }));
+const home0 = homeRender;
+homeRender = function () {
+  home0();
+  document.querySelectorAll('#home .card').forEach(b => {
+    const g = b.dataset.g, i = b.querySelector('i'), emoji = i.textContent;
+    const img = new Image();
+    img.width = 64; img.height = 64; img.alt = emoji;
+    img.onload = () => { i.textContent = ''; i.appendChild(img); };
+    img.src = 'icons/' + g + '.png';
+  });
+};
 show('home');
 </script>
 </body>
