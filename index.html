@@ -1516,3 +1516,7 @@ TIPS.escape = 'Drag cars along their lane to clear a path, then slide the red ca
 cv.addEventListener('pointerdown', e => { if (cur === 'escape') ES.down(...cp(e)); });
 cv.addEventListener('pointermove', e => { if (cur === 'escape') ES.move(...cp(e)); });
 ['pointerup', 'pointercancel', 'pointerleave'].forEach(t => cv.addEventListener(t, () => { if (cur === 'escape') ES.up(); }));
+show('home');
+</script>
+</body>
+</html>
