@@ -1372,10 +1372,7 @@ wordRender = function () {
 Object.values(CG).forEach(g => { const d = g.draw; g.draw = function () { d.call(this); vig(); }; });
 
 
-/* ===== COLOR + FIX PATCH =====
-   Paste this whole block right BEFORE the last line:
-   theme(); coinUI(); qReset(); dailyUI(); lvlUI(); show('home');
-   (after the polish patch) */
+/* ===== COLOR + FIX PATCH ===== */
 
 /* ---- older phones: roundRect polyfill (can blank Defense) ---- */
 if (!CanvasRenderingContext2D.prototype.roundRect) CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
@@ -1519,12 +1516,7 @@ document.addEventListener('keydown', e => { if (cur === 'word' && (e.ctrlKey || 
 
 theme();
 
-/* ===== PATCH 2: Escape game + level slider + drawn icons ===== */
-
-if (!CanvasRenderingContext2D.prototype.roundRect) CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
-  r = Math.min(r || 0, w / 2, h / 2); this.moveTo(x + r, y); this.arcTo(x + w, y, x + w, y + h, r);
-  this.arcTo(x + w, y + h, x, y + h, r); this.arcTo(x, y + h, x, y, r); this.arcTo(x, y, x + w, y, r); this.closePath();
-};
+/* ===== PATCH 2: Escape game + drawn icons ===== */
 
 /* ---------- Escape (sliding car puzzle) ---------- */
 const ESC_L = [
@@ -1595,4 +1587,6 @@ const ICO = {
   snake: '<path d="M12 50Q12 34 28 34T46 20" fill="none" stroke="#2fd17a" stroke-width="10" stroke-linecap="round"/><circle cx="47" cy="19" r="8" fill="#2fd17a"/><circle cx="49" cy="17" r="2.5" fill="#fff"/><circle cx="52" cy="50" r="7" fill="#ff5d73"/>',
   pong: '<rect x="14" y="10" width="36" height="7" rx="3.5" fill="#ff5d73"/><rect x="14" y="47" width="36" height="7" rx="3.5" fill="#fff"/><circle cx="34" cy="32" r="6" fill="#ffc857"/>',
   invaders: '<rect x="16" y="22" width="32" height="20" rx="7" fill="#fff"/><rect x="22" y="28" width="6" height="6" fill="#6a3df0"/><rect x="36" y="28" width="6" height="6" fill="#6a3df0"/><path d="M22 20l-5-8M42 20l5-8M20 44v8M28 44v6M36 44v6M44 44v8" stroke="#fff" stroke-width="4" stroke-linecap="round"/>',
-  ninja: '<path d="M8 26a24 24 0 0 0 48 0z" fill="#ff4d6d"/><path d="M8 26a24 24 0 0 0 48 0" fill="none" stroke="#3fbf4a" stroke-width="5"/><circle cx="24" cy="36" r="2" fill="#222"/><circle cx="34" cy="40" r="2" fill="#222"/><circle cx="43" cy="34" r="2" fill="#222"/><path d="M6 50L58 12" stroke="#fff" stroke-width="4" stroke-
+  ninja: '<path d="M8 26a24 24 0 0 0 48 0z" fill="#ff4d6d"/><path d="M8 26a24 24 0 0 0 48 0" fill="none" stroke="#3fbf4a" stroke-width="5"/><circle cx="24" cy="36" r="2" fill="#222"/><circle cx="34" cy="40" r="2" fill="#222"/><circle cx="43" cy="34" r="2" fill="#222"/><path d="M6 50L58 12" stroke="#fff" stroke-width="4" stroke-linecap="round"/>',
+  td: '<rect x="18" y="26" width="28" height="26" rx="3" fill="#fff"/><path d="M14 26h8v-8h6v8h8v-8h6v8h8" fill="none" stroke="#fff" stroke-width="5" stroke-linejoin="round"/><rect x="27" y="38" width="10" height="14" rx="5" fill="#2b9fd8"/>',
+  word: '<rect x="8" y="14" width="22" height="22" rx="5" fill="#2fd17a"/><rect x="34" y="14" width="22" height="22" rx="5" fill="#fff"/><rect x="8" y="40" width="22" height="14" rx="5" fill="#6b5d9e"/><rect x="34" y="40" width="22" height="14" rx="
